@@ -1,3 +1,4 @@
+
 # N-Body Gravitational Simulator
 
 A 2D N-body gravitational simulator built using Python and Pygame. The project models the gravitational interactions between the Sun and five planets — Venus, Earth, Mars, Jupiter, and Saturn — using Newton's law of universal gravitation.
@@ -23,7 +24,7 @@ The gravitational acceleration of body *i* due to all other bodies is calculated
 
 $$
 \mathbf{a}_i =
-G\sum_{\substack{j=1\\j\ne i}}^N
+G \sum_{\substack{j=1 \\ j \ne i}}^{N}
 m_j
 \frac{\mathbf{r}_j-\mathbf{r}_i}
 {|\mathbf{r}_j-\mathbf{r}_i|^3}
@@ -41,11 +42,11 @@ where:
 The gravitational acceleration is used to solve the coupled equations of motion:
 
 $$
-\frac{d\mathbf{r}_i}{dt}=\mathbf{v}_i
+\frac{d\mathbf{r}_i}{dt} = \mathbf{v}_i
 $$
 
 $$
-\frac{d\mathbf{v}_i}{dt}=\mathbf{a}_i
+\frac{d\mathbf{v}_i}{dt} = \mathbf{a}_i
 $$
 
 These equations describe the evolution of the position and velocity of every body in the system.
@@ -57,8 +58,8 @@ The system of differential equations is solved using the fourth-order Runge–Ku
 The update equation is:
 
 $$
-y_{n+1}=y_n+\frac{\Delta t}{6}
-(k_1+2k_2+2k_3+k_4)
+y_{n+1} = y_n + \frac{\Delta t}{6}
+(k_1 + 2k_2 + 2k_3 + k_4)
 $$
 
 where $k_1$, $k_2$, $k_3$, and $k_4$ represent the four intermediate evaluations of the derivative.
@@ -70,19 +71,21 @@ All bodies are updated using the intermediate states of the complete system.
 The total mechanical energy is calculated as the sum of kinetic and gravitational potential energy:
 
 $$
-E=K+U
+E = K + U
 $$
 
 **Kinetic energy:**
 
 $$
-K=\sum_{i=1}^{N}\frac{1}{2}m_i|\mathbf{v}_i|^2
+K = \sum_{i=1}^{N}
+\frac{1}{2}m_i|\mathbf{v}_i|^2
 $$
 
 **Gravitational potential energy:**
 
 $$
-U=-\sum_{i=1}^{N-1}\sum_{j=i+1}^{N}
+U = -\sum_{i=1}^{N-1}
+\sum_{j=i+1}^{N}
 \frac{Gm_im_j}
 {|\mathbf{r}_i-\mathbf{r}_j|}
 $$
@@ -90,8 +93,8 @@ $$
 The relative energy drift is monitored using:
 
 $$
-\Delta E(\%)=
-\frac{E(t)-E(0)}{|E(0)|}\times100
+\Delta E(\%) =
+\frac{E(t)-E(0)}{|E(0)|}\times 100
 $$
 
 This provides a way to observe how the numerical integration affects the system's total energy over time.
@@ -111,13 +114,13 @@ The simulation uses astronomical units:
 The gravitational constant in these units is:
 
 $$
-G=4\pi^2
+G = 4\pi^2
 $$
 
 The physics timestep is fixed at one simulated day:
 
 $$
-\Delta t=\frac{1}{365.25}\text{ years}
+\Delta t = \frac{1}{365.25}\text{ years}
 $$
 
 The initial planetary positions and velocities are approximate. The planets are initialized using approximate orbital radii and circular heliocentric velocities, followed by a transformation into the barycentric reference frame.

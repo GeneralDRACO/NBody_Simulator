@@ -33,7 +33,6 @@ PHYSICS_DT = 1 / 365.25
 # This converts rendering seconds into simulation years.
 SIMULATION_YEARS_PER_SECOND = 1 / 30
 
-# Limit stored trajectory points to prevent unlimited memory growth.
 MAX_TRAIL_POINTS = 3000
 
 
@@ -155,8 +154,6 @@ def calculate_accelerations(states, planets):
 
             r_squared = dx * dx + dy * dy
 
-            # Avoid division by zero if two bodies occupy
-            # exactly the same position.
             if r_squared == 0:
                 continue
 
@@ -254,10 +251,52 @@ def rk4_step(planets, dt):
 
 
 # ============================================================
+# TOTAL MECHANICAL ENERGY
+# ============================================================
+
+def calculate_total_energy(planets):
+    """
+    Return total kinetic + gravitational potential energy.
+
+    Uses the same simulation units as the integrator:
+    solar masses, AU, years, and G in AU^3/(solar mass * year^2).
+    Each pair's potential energy is counted exactly once.
+    """
+
+    kinetic_energy = 0.0
+    potential_energy = 0.0
+
+    # Kinetic energy: sum(1/2 * m * v^2)
+    for planet in planets:
+        speed_squared = planet.Vx**2 + planet.Vy**2
+        kinetic_energy += 0.5 * planet.mass * speed_squared
+
+    # Gravitational potential energy: sum over unique pairs (i < j)
+    for i in range(len(planets)):
+        for j in range(i + 1, len(planets)):
+            first = planets[i]
+            second = planets[j]
+
+            dx = second.x - first.x
+            dy = second.y - first.y
+            distance = math.sqrt(dx * dx + dy * dy)
+
+            if distance == 0:
+                continue
+
+            potential_energy -= (
+                G * first.mass * second.mass / distance
+            )
+
+    return kinetic_energy + potential_energy
+
+
+# ============================================================
 # INITIAL CONDITIONS - APPROXIMATE 2D SOLAR SYSTEM
 # ============================================================
 
 # Approximate mean orbital radii and planetary-to-solar mass ratios.
+
 
 Sun = Planet("Sun", 1.0, 0, 0, 0, 0, 0.12, (255, 190, 40))
 
@@ -296,8 +335,6 @@ Saturn = make_planet(
 planets = [Sun, Venus, Earth, Mars, Jupiter, Saturn]
 
 # Shift the initial state to the Solar System barycentric frame.
-# This preserves relative positions/velocities while making total
-# centre-of-mass position and momentum zero.
 total_mass = sum(planet.mass for planet in planets)
 
 com_x = sum(p.mass * p.x for p in planets) / total_mass
@@ -311,6 +348,9 @@ for planet in planets:
     planet.Vx -= com_vx
     planet.Vy -= com_vy
 
+# Reference energy for monitoring numerical energy drift.
+initial_energy = calculate_total_energy(planets)
+
 
 # ============================================================
 # TRAJECTORY STORAGE AND CAMERA
@@ -320,8 +360,9 @@ trajectories = {planet.name: [] for planet in planets}
 camera = Camera()
 
 
+# ============================================================
 # MAIN LOOP
-
+# ============================================================
 
 run = True
 accumulator = 0.0
@@ -330,6 +371,8 @@ while run:
     # Rendering frame time, in real seconds.
     frame_time = clock.tick(FPS) / 1000.0
 
+    # Avoid a very large catch-up after the window is paused
+    # or the computer temporarily slows down.
     frame_time = min(frame_time, 0.05)
 
     accumulator += frame_time * SIMULATION_YEARS_PER_SECOND
@@ -340,9 +383,9 @@ while run:
 
         camera.handle_event(event)
 
-    # --------------------------------------------------------
+
     # UPDATE PHYSICS AT A FIXED TIMESTEP
-    # --------------------------------------------------------
+
 
     while accumulator >= PHYSICS_DT:
         rk4_step(planets, PHYSICS_DT)
@@ -397,16 +440,32 @@ while run:
     # DISPLAY CAMERA AND SIMULATION INFORMATION
     # --------------------------------------------------------
 
+    current_energy = calculate_total_energy(planets)
+
+    if abs(initial_energy) > 1e-15:
+        energy_drift_percent = (
+            (current_energy - initial_energy) / abs(initial_energy)
+        ) * 100.0
+    else:
+        energy_drift_percent = 0.0
+
     info_text = font.render(
-        f"Camera: ({camera.x:.1f}, {camera.y:.1f})   "
+        f"Camera: ({camera.x:.2f}, {camera.y:.2f})   "
         f"Zoom: {camera.zoom:.2f}x   "
-        f"Physics dt: {PHYSICS_DT:.5f} yr   "
-        f"Sim speed: {SIMULATION_YEARS_PER_SECOND:.4f} yr/s",
+        f"dt: {PHYSICS_DT:.6f} yr",
         True,
         (255, 255, 255)
     )
 
+    energy_text = font.render(
+        f"Total Energy: {current_energy:.8e}   "
+        f"Energy Drift: {energy_drift_percent:+.6e}%",
+        True,
+        (120, 230, 150)
+    )
+
     win.blit(info_text, (20, 20))
+    win.blit(energy_text, (20, 48))
 
     pygame.display.flip()
 

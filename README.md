@@ -1,4 +1,3 @@
-
 # N-Body Gravitational Simulator
 
 A 2D N-body gravitational simulator built using Python and Pygame. The project models the gravitational interactions between the Sun and five planets — Venus, Earth, Mars, Jupiter, and Saturn — using Newton's law of universal gravitation.
@@ -74,17 +73,18 @@ $$
 E=K+U
 $$
 
-Kinetic energy:
+**Kinetic energy:**
 
 $$
-K=\sum_i\frac{1}{2}m_i|\mathbf{v}_i|^2
+K=\sum_{i=1}^{N}\frac{1}{2}m_i|\mathbf{v}_i|^2
 $$
 
-Gravitational potential energy:
+**Gravitational potential energy:**
 
 $$
-U=-\sum_{i<j}
-\frac{Gm_im_j}{|\mathbf{r}_i-\mathbf{r}_j|}
+U=-\sum_{i=1}^{N-1}\sum_{j=i+1}^{N}
+\frac{Gm_im_j}
+{|\mathbf{r}_i-\mathbf{r}_j|}
 $$
 
 The relative energy drift is monitored using:

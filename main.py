@@ -1,18 +1,37 @@
 import math
 import pygame
 
+pygame.init()
+
+# ============================================================
+# DISPLAY SETTINGS
+# ============================================================
+
 WIDTH = 1400
 HEIGHT = 800
 FPS = 60
+
+win = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("N-Body Gravitational Simulator")
+
+font = pygame.font.SysFont(None, 24)
+clock = pygame.time.Clock()
 
 # ============================================================
 # SIMULATION SETTINGS
 # ============================================================
 
-G = 100000
+# Astronomical simulation units:
+# distance = AU, mass = solar masses, time = years,
+# velocity = AU/year. In these units G = 4*pi^2.
+G = 4 * math.pi**2
 
-PHYSICS_DT = 1 / 120
-SIMULATION_SPEED = 1.0
+# Fixed physics timestep: one simulated day, expressed in years.
+PHYSICS_DT = 1 / 365.25
+
+# Simulate one year for every 30 seconds of real time.
+# This converts rendering seconds into simulation years.
+SIMULATION_YEARS_PER_SECOND = 1 / 30
 
 # Limit stored trajectory points to prevent unlimited memory growth.
 MAX_TRAIL_POINTS = 3000
@@ -38,7 +57,7 @@ class Planet:
         self.radius = radius
         self.color = color
 
-    def draw(self, surface, camera, font):
+    def draw(self, surface, camera):
         screen_x, screen_y = camera.world_to_screen(self.x, self.y)
         screen_radius = max(2, int(self.radius * camera.zoom))
 
@@ -62,9 +81,10 @@ class Planet:
 
 class Camera:
     def __init__(self):
-        self.x = 500.0
-        self.y = 400.0
-        self.zoom = 2.0
+        # View the Solar System barycentre.
+        self.x = 0.0
+        self.y = 0.0
+        self.zoom = 40.0
 
         self.dragging = False
         self.last_mouse_pos = (0, 0)
@@ -101,7 +121,7 @@ class Camera:
             elif event.y < 0:
                 self.zoom /= 1.1
 
-            self.zoom = max(0.1, min(self.zoom, 5.0))
+            self.zoom = max(5.0, min(self.zoom, 100.0))
 
 
 # ============================================================
@@ -233,86 +253,162 @@ def rk4_step(planets, dt):
         )
 
 
-def main():
-    pygame.init()
-    win = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("N-Body Gravitational Simulator")
+# ============================================================
+# INITIAL CONDITIONS - APPROXIMATE 2D SOLAR SYSTEM
+# ============================================================
 
-    font = pygame.font.SysFont(None, 24)
-    clock = pygame.time.Clock()
+# Approximate mean orbital radii and planetary-to-solar mass ratios.
 
-    # Initial conditions
-    planets = [
-        Planet("Sun", 100, 400, 400, 0, 0, 40, (255, 0, 0)),
-        Planet("Earth", 1, 50, 50, -110, 110, 10, (0, 0, 255)),
-        Planet("Mars", 0.5, 700, 200, 0, 100, 8, (255, 100, 0)),
-        Planet("Jupiter", 10, 900, 500, -50, 80, 15, (200, 150, 100)),
-        Planet("Venus", 0.8, -300, 300, 80, -50, 9, (255, 200, 100)),
-        Planet("Saturn", 5, 1500, 700, -70, -40, 14, (220, 180, 100)),
-    ]
+Sun = Planet("Sun", 1.0, 0, 0, 0, 0, 0.12, (255, 190, 40))
 
-    trajectories = {planet.name: [] for planet in planets}
-    camera = Camera()
-    accumulator = 0.0
-    run = True
+def make_planet(name, mass, orbital_radius, angle_deg, draw_radius, color):
+    theta = math.radians(angle_deg)
 
-    try:
-        while run:
-            frame_time = min(clock.tick(FPS) / 1000.0, 0.05)
-            accumulator += frame_time * SIMULATION_SPEED
+    x = orbital_radius * math.cos(theta)
+    y = orbital_radius * math.sin(theta)
 
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    run = False
+    # Approximate circular heliocentric speed.
+    speed = math.sqrt(G * (Sun.mass + mass) / orbital_radius)
+    vx = -speed * math.sin(theta)
+    vy = speed * math.cos(theta)
 
-                camera.handle_event(event)
+    return Planet(
+        name, mass, x, y, vx, vy, draw_radius, color
+    )
 
-            while accumulator >= PHYSICS_DT:
-                rk4_step(planets, PHYSICS_DT)
-                accumulator -= PHYSICS_DT
 
-            for planet in planets:
-                trail = trajectories[planet.name]
-                trail.append((planet.x, planet.y))
+Venus = make_planet(
+    "Venus", 2.447e-6, 0.723, 35, 0.045, (255, 190, 100)
+)
+Earth = make_planet(
+    "Earth", 3.003e-6, 1.000, 115, 0.050, (70, 130, 255)
+)
+Mars = make_planet(
+    "Mars", 3.227e-7, 1.524, 205, 0.040, (230, 90, 55)
+)
+Jupiter = make_planet(
+    "Jupiter", 9.545e-4, 5.203, 285, 0.090, (205, 165, 120)
+)
+Saturn = make_planet(
+    "Saturn", 2.858e-4, 9.537, 330, 0.080, (220, 195, 135)
+)
 
-                if len(trail) > MAX_TRAIL_POINTS:
-                    del trail[0]
+planets = [Sun, Venus, Earth, Mars, Jupiter, Saturn]
 
-            win.fill((0, 0, 0))
+# Shift the initial state to the Solar System barycentric frame.
+# This preserves relative positions/velocities while making total
+# centre-of-mass position and momentum zero.
+total_mass = sum(planet.mass for planet in planets)
 
-            for planet in planets:
-                trajectory = trajectories[planet.name]
+com_x = sum(p.mass * p.x for p in planets) / total_mass
+com_y = sum(p.mass * p.y for p in planets) / total_mass
+com_vx = sum(p.mass * p.Vx for p in planets) / total_mass
+com_vy = sum(p.mass * p.Vy for p in planets) / total_mass
 
-                if len(trajectory) > 1:
-                    screen_trajectory = [
-                        tuple(map(int, camera.world_to_screen(x, y)))
-                        for x, y in trajectory
-                    ]
+for planet in planets:
+    planet.x -= com_x
+    planet.y -= com_y
+    planet.Vx -= com_vx
+    planet.Vy -= com_vy
 
-                    pygame.draw.lines(
-                        win,
-                        planet.color,
-                        False,
-                        screen_trajectory,
-                        2
-                    )
 
-            for planet in planets:
-                planet.draw(win, camera, font)
+# ============================================================
+# TRAJECTORY STORAGE AND CAMERA
+# ============================================================
 
-            info_text = font.render(
-                f"Camera: ({camera.x:.1f}, {camera.y:.1f})   "
-                f"Zoom: {camera.zoom:.2f}x   "
-                f"Physics dt: {PHYSICS_DT:.5f}",
-                True,
-                (255, 255, 255)
+trajectories = {planet.name: [] for planet in planets}
+camera = Camera()
+
+
+# MAIN LOOP
+
+
+run = True
+accumulator = 0.0
+
+while run:
+    # Rendering frame time, in real seconds.
+    frame_time = clock.tick(FPS) / 1000.0
+
+    frame_time = min(frame_time, 0.05)
+
+    accumulator += frame_time * SIMULATION_YEARS_PER_SECOND
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            run = False
+
+        camera.handle_event(event)
+
+    # --------------------------------------------------------
+    # UPDATE PHYSICS AT A FIXED TIMESTEP
+    # --------------------------------------------------------
+
+    while accumulator >= PHYSICS_DT:
+        rk4_step(planets, PHYSICS_DT)
+        accumulator -= PHYSICS_DT
+
+    # --------------------------------------------------------
+    # STORE TRAJECTORIES
+    # --------------------------------------------------------
+
+    for planet in planets:
+        trail = trajectories[planet.name]
+        trail.append((planet.x, planet.y))
+
+        if len(trail) > MAX_TRAIL_POINTS:
+            del trail[0]
+
+    # --------------------------------------------------------
+    # DRAW BACKGROUND
+    # --------------------------------------------------------
+
+    win.fill((0, 0, 0))
+
+    # --------------------------------------------------------
+    # DRAW TRAJECTORIES
+    # --------------------------------------------------------
+
+    for planet in planets:
+        trajectory = trajectories[planet.name]
+
+        if len(trajectory) > 1:
+            screen_trajectory = [
+                tuple(map(int, camera.world_to_screen(x, y)))
+                for x, y in trajectory
+            ]
+
+            pygame.draw.lines(
+                win,
+                planet.color,
+                False,
+                screen_trajectory,
+                2
             )
 
-            win.blit(info_text, (20, 20))
-            pygame.display.flip()
-    finally:
-        pygame.quit()
+    # --------------------------------------------------------
+    # DRAW PLANETS
+    # --------------------------------------------------------
+
+    for planet in planets:
+        planet.draw(win, camera)
+
+    # --------------------------------------------------------
+    # DISPLAY CAMERA AND SIMULATION INFORMATION
+    # --------------------------------------------------------
+
+    info_text = font.render(
+        f"Camera: ({camera.x:.1f}, {camera.y:.1f})   "
+        f"Zoom: {camera.zoom:.2f}x   "
+        f"Physics dt: {PHYSICS_DT:.5f} yr   "
+        f"Sim speed: {SIMULATION_YEARS_PER_SECOND:.4f} yr/s",
+        True,
+        (255, 255, 255)
+    )
+
+    win.blit(info_text, (20, 20))
+
+    pygame.display.flip()
 
 
-if __name__ == "__main__":
-    main()
+pygame.quit()

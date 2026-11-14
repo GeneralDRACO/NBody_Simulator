@@ -180,6 +180,6 @@ python main.py
 
 ## Author
 
-**GeneralDRACO**
+**[GeneralDRACO](https://github.com/GeneralDRACO)**
 
 GitHub Repository: [NBody_Simulator](https://github.com/GeneralDRACO/NBody_Simulator)
